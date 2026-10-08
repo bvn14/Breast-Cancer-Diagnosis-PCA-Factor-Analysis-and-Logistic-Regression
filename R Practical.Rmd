@@ -1,0 +1,421 @@
+---
+title: "Take-Home R Practical Examination"
+author: "Bavindu Gunasinghe"
+date: "2024-11-14"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2)
+library(corrplot)
+library(GGally)
+
+# (a) Load the Dataset and Examine for Missing Values, Duplicates, or Outliers
+# Load the data (make sure to adjust the file path)
+data <- read.csv("C:\\Users\\ranak\\Downloads\\breast+cancer+wisconsin+diagnostic\\wdbc.data", header = FALSE)
+
+# Add column names (following the provided Python column names)
+colnames(data) <- c('ID', 'Diagnosis', 
+                    'Radius_Mean', 'Texture_Mean', 'Perimeter_Mean', 'Area_Mean', 'Smoothness_Mean', 
+                    'Compactness_Mean', 'Concavity_Mean', 'Concave_Points_Mean', 'Symmetry_Mean', 'Fractal_Dimension_Mean',
+                    'Radius_SE', 'Texture_SE', 'Perimeter_SE', 'Area_SE', 'Smoothness_SE', 'Compactness_SE', 
+                    'Concavity_SE', 'Concave_Points_SE', 'Symmetry_SE', 'Fractal_Dimension_SE',
+                    'Radius_Worst', 'Texture_Worst', 'Perimeter_Worst', 'Area_Worst', 'Smoothness_Worst', 
+                    'Compactness_Worst', 'Concavity_Worst', 'Concave_Points_Worst', 'Symmetry_Worst', 
+                    'Fractal_Dimension_Worst')
+
+# Check for missing values
+anyNA(data)
+
+# Check for duplicates based on ID
+data <- data[!duplicated(data$ID), ]
+
+# Remove ID column for analysis
+data <- data %>% select(-ID)
+
+# Convert Diagnosis to a factor
+data$Diagnosis <- as.factor(data$Diagnosis)
+
+# (b) Standardize the Dataset
+# Separate Diagnosis and features
+data_features <- data %>% select(-Diagnosis)
+data_features <- scale(data_features) # Standardize features
+
+# Combine back for analysis
+data <- data.frame(Diagnosis = data$Diagnosis, data_features)
+
+# (c) Provide Summary Statistics and Visualizations
+
+# Summary statistics
+summary(data)
+
+# Histograms of each feature
+data %>%
+  gather(key = "Feature", value = "Value", -Diagnosis) %>%
+  ggplot(aes(x = Value, fill = Diagnosis)) +
+  geom_histogram(bins = 30, position = "dodge") +
+  facet_wrap(~ Feature, scales = "free") +
+  theme_minimal() +
+  ggtitle("Distribution of Each Feature by Diagnosis")
+
+# Correlation Heatmap for all features
+corr_matrix <- cor(data_features)
+corrplot(corr_matrix, method = "color", type = "upper", tl.cex = 0.8, title = "Feature Correlation Matrix")
+
+# Box plots for feature distributions across diagnosis
+data %>%
+  gather(key = "Feature", value = "Value", -Diagnosis) %>%
+  ggplot(aes(x = Diagnosis, y = Value, fill = Diagnosis)) +
+  geom_boxplot() +
+  facet_wrap(~ Feature, scales = "free") +
+  theme_minimal() +
+  ggtitle("Box Plot of Each Feature by Diagnosis")
+
+# Pair plot for visualizing relationships between key features
+ggpairs(data, aes(color = Diagnosis, alpha = 0.5))
+
+```
+
+```{r}
+# Load the data
+data <- read.csv("C:\\Users\\ranak\\Downloads\\breast+cancer+wisconsin+diagnostic\\wdbc.data", header = FALSE)
+
+# Rename columns with variable names
+colnames(data) <- c(
+    'ID', 'Diagnosis', 
+    'Radius_Mean', 'Texture_Mean', 'Perimeter_Mean', 'Area_Mean', 'Smoothness_Mean', 
+    'Compactness_Mean', 'Concavity_Mean', 'Concave_Points_Mean', 'Symmetry_Mean', 'Fractal_Dimension_Mean',
+    'Radius_SE', 'Texture_SE', 'Perimeter_SE', 'Area_SE', 'Smoothness_SE', 'Compactness_SE', 
+    'Concavity_SE', 'Concave_Points_SE', 'Symmetry_SE', 'Fractal_Dimension_SE',
+    'Radius_Worst', 'Texture_Worst', 'Perimeter_Worst', 'Area_Worst', 'Smoothness_Worst', 
+    'Compactness_Worst', 'Concavity_Worst', 'Concave_Points_Worst', 'Symmetry_Worst', 
+    'Fractal_Dimension_Worst'
+)
+
+# Preview the first few rows to verify the new column names
+head(data)
+
+```
+2.Principal Component Analysis (PCA)
+Task (a): Perform PCA
+```{r}
+# Load necessary libraries for PCA
+library(tidyverse)
+library(ggplot2)
+library(corrplot)
+library(GGally)
+library(FactoMineR) # for PCA analysis
+library(factoextra) # for PCA visualization
+
+# Perform PCA on standardized data (exclude Diagnosis column)
+pca_result <- prcomp(data_features, center = TRUE, scale. = TRUE)
+
+# Calculate cumulative variance explained by each principal component
+explained_variance <- summary(pca_result)$importance[3, ]
+
+# Find the minimum number of components that explain at least 90% of variance
+num_components <- min(which(cumsum(explained_variance) >= 0.90))
+
+# Display the number of components needed to explain at least 90% of the variance
+num_components
+
+```
+Task (b): Scree Plot of PCA Components
+```{r}
+# Plot scree plot
+fviz_screeplot(pca_result, addlabels = TRUE, ylim = c(0, 50)) +
+  ggtitle("Scree Plot of Principal Components")
+
+```
+Task (c): Analyze Loadings of the Top Components
+```{r}
+# Extract loadings (weights) of each feature on the principal components
+loadings <- as.data.frame(pca_result$rotation)
+
+# Display top loadings for the first few principal components
+head(loadings[, 1:num_components])  # Adjust number of components as needed
+
+```
+Task (d): 2D Scatter Plot of Samples in Principal Component Space
+```{r}
+# Create a data frame with PCA scores and Diagnosis for plotting
+pca_scores <- as.data.frame(pca_result$x[, 1:2])  # Select first two components
+pca_scores$Diagnosis <- data$Diagnosis
+
+# Scatter plot of samples projected onto the first two principal components
+ggplot(pca_scores, aes(x = PC1, y = PC2, color = Diagnosis)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "2D Scatter Plot on First Two Principal Components",
+       x = "Principal Component 1", y = "Principal Component 2") +
+  theme_minimal()
+
+```
+ 3.Factor Analysis (FA)
+ Task (a): Scree Plot or Parallel Analysis for Optimal Number of Factors
+```{r}
+# Load necessary libraries
+library(psych)       # For factor analysis and parallel analysis
+library(GPArotation) # For rotation methods
+library(tidyverse)   # For data manipulation
+
+```
+
+```{r}
+# Parallel analysis to decide the optimal number of factors
+parallel <- fa.parallel(data_features, fm = "ml", fa = "fa")
+```
+
+
+```{r}
+# Scree plot using PCA as an approximation
+scree_plot <- prcomp(data_features, scale. = TRUE)
+plot(scree_plot$sdev^2, type = "b", main = "Scree Plot of Principal Components",
+     xlab = "Component Number", ylab = "Eigenvalue")
+
+```
+ Task (b): Perform Factor Analysis with Optimal Number of Factors
+```{r}
+# Perform factor analysis with the chosen number of factors
+num_factors <- 4  # Replace with the chosen number from parallel analysis or scree plot
+fa_result <- fa(data_features, nfactors = num_factors, rotate = "none", fm = "ml")
+
+```
+ Task (c): Apply Rotation for Simpler Factor Structure
+```{r}
+# Apply varimax rotation for a simpler factor structure
+fa_rotated <- fa(data_features, nfactors = num_factors, rotate = "varimax", fm = "ml")
+
+# Alternatively, use promax if factors are expected to be correlated
+fa_rotated_promax <- fa(data_features, nfactors = num_factors, rotate = "promax", fm = "ml")
+
+```
+Task (d): Describe Each Factor by Examining Factor Loadings 
+1)View Factor Loadings
+```{r}
+# Display unrotated factor loadings
+print(fa_result$loadings, cutoff = 0.3)  # Show loadings above 0.3 for clarity
+
+# Display rotated factor loadings (varimax)
+print(fa_rotated$loadings, cutoff = 0.3)
+
+```
+ 2)Interpret Each Factor
+### Features with high loadings (e.g., > 0.5) on the same factor likely represent related characteristics. For example, a factor with high loadings from Radius_Mean, Perimeter_Mean, and Area_Mean may signify a "size" factor of the tumor.
+3)Plot Factor Loadings
+```{r}
+# Factor loading plot for rotated factors
+fa.diagram(fa_rotated, main = "Factor Loading Diagram (Varimax Rotation)")
+
+```
+4.Two Regression Models with PCA and FA Components
+ Prepare the PCA and FA Features
+## Choose the top PCA components and FA factors based on variance explained or   interpretability (e.g., components or factors that together explain 90% of the variance).
+##Use the PCA and FA results to create new data frames with only these selected components or factors.
+Split Data into Training and Testing Sets
+```{r}
+# Set seed for reproducibility
+set.seed(42)
+
+# Define indices for training and test sets (80% train, 20% test)
+train_indices <- sample(seq_len(nrow(data)), size = 0.8 * nrow(data))
+
+# Split data based on indices
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+
+```
+Train Logistic Regression Model
+```{r}
+# Remove ID column and convert Diagnosis to binary format
+data <- data %>% select(-ID)
+data$Diagnosis <- ifelse(data$Diagnosis == "M", 1, 0)
+
+# Separate features and diagnosis
+data_features <- data %>% select(-Diagnosis)
+data_features <- scale(data_features)  # Standardize features
+
+# Combine Diagnosis and standardized features
+data <- data.frame(Diagnosis = data$Diagnosis, data_features)
+```
+
+
+```{r}
+# Load necessary library for PCA
+library(FactoMineR)
+
+# Perform PCA on standardized features
+pca_result <- PCA(data_features, graph = FALSE)
+pca_scores <- as.data.frame(pca_result$ind$coord)  # Extract PCA component scores
+
+# Add Diagnosis to PCA scores for modeling
+pca_scores$Diagnosis <- data$Diagnosis
+
+
+```
+
+```{r}
+# Load necessary library for FA
+library(psych)
+
+# Decide on the number of factors
+num_factors <- 5  # Replace with optimal number after performing Scree or Parallel analysis
+
+# Perform FA and extract scores
+fa_result <- fa(data_features, nfactors = num_factors, rotate = "varimax", fm = "ml", scores = "regression")
+fa_scores <- as.data.frame(fa_result$scores)
+
+# Add Diagnosis to FA scores for modeling
+fa_scores$Diagnosis <- data$Diagnosis
+
+
+```
+
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+
+# Define training indices
+train_indices <- sample(1:nrow(data), size = 0.8 * nrow(data))
+
+# Split PCA and FA data
+train_pca <- pca_scores[train_indices, ]
+test_pca <- pca_scores[-train_indices, ]
+
+train_fa <- fa_scores[train_indices, ]
+test_fa <- fa_scores[-train_indices, ]
+
+# No further transformation needed since Diagnosis is already in binary format
+str(train_pca$Diagnosis)  # Should be numeric with values 0 and 1
+str(train_fa$Diagnosis)   # Should be numeric with values 0 and 1
+
+
+```
+```{r}
+library(glmnet)
+```
+
+```{r}
+# Convert data to matrix format as glmnet requires this
+x_pca <- as.matrix(train_pca[, -ncol(train_pca)])  # Exclude Diagnosis column
+y_pca <- train_pca$Diagnosis
+
+x_fa <- as.matrix(train_fa[, -ncol(train_fa)])  # Exclude Diagnosis column
+y_fa <- train_fa$Diagnosis
+
+# Train Lasso-regularized logistic regression model for PCA components
+pca_model_lasso <- cv.glmnet(x_pca, y_pca, family = "binomial", alpha = 1)
+
+# Train Lasso-regularized logistic regression model for FA factors
+fa_model_lasso <- cv.glmnet(x_fa, y_fa, family = "binomial", alpha = 1)
+
+
+```
+
+```{r}
+# Optimal lambda for PCA model
+pca_model_lasso$lambda.min
+
+# Optimal lambda for FA model
+fa_model_lasso$lambda.min
+
+# Coefficients for PCA model
+coef(pca_model_lasso, s = "lambda.min")
+
+# Coefficients for FA model
+coef(fa_model_lasso, s = "lambda.min")
+
+
+```
+
+```{r}
+# Prepare test matrices (remove Diagnosis column)
+x_test_pca <- as.matrix(test_pca[, -ncol(test_pca)])
+x_test_fa <- as.matrix(test_fa[, -ncol(test_fa)])
+
+# Predict probabilities on test sets
+pca_pred_prob <- predict(pca_model_lasso, newx = x_test_pca, s = "lambda.min", type = "response")
+fa_pred_prob <- predict(fa_model_lasso, newx = x_test_fa, s = "lambda.min", type = "response")
+
+# Convert probabilities to binary predictions (threshold 0.5)
+pca_pred <- ifelse(pca_pred_prob > 0.5, 1, 0)
+fa_pred <- ifelse(fa_pred_prob > 0.5, 1, 0)
+
+```
+
+```{r}
+library(caret)
+# True labels
+y_test <- test_pca$Diagnosis
+
+# Performance metrics for PCA-based model
+pca_confusion <- confusionMatrix(as.factor(pca_pred), as.factor(y_test))
+pca_metrics <- data.frame(
+    Accuracy = pca_confusion$overall["Accuracy"],
+    Precision = pca_confusion$byClass["Pos Pred Value"],
+    Recall = pca_confusion$byClass["Sensitivity"],
+    F1 = 2 * (pca_confusion$byClass["Pos Pred Value"] * pca_confusion$byClass["Sensitivity"]) /
+         (pca_confusion$byClass["Pos Pred Value"] + pca_confusion$byClass["Sensitivity"])
+)
+
+# Performance metrics for FA-based model
+fa_confusion <- confusionMatrix(as.factor(fa_pred), as.factor(y_test))
+fa_metrics <- data.frame(
+    Accuracy = fa_confusion$overall["Accuracy"],
+    Precision = fa_confusion$byClass["Pos Pred Value"],
+    Recall = fa_confusion$byClass["Sensitivity"],
+    F1 = 2 * (fa_confusion$byClass["Pos Pred Value"] * fa_confusion$byClass["Sensitivity"]) /
+         (fa_confusion$byClass["Pos Pred Value"] + fa_confusion$byClass["Sensitivity"])
+)
+
+# Display performance metrics
+pca_metrics
+fa_metrics
+
+```
+##Comparison of PCA and FA Results and Interpretability
+#Model Performance: PCA likely produced better model performance in terms of accuracy, precision, recall, and F1-score. PCA’s focus on variance maximization made it effective for distinguishing between malignant and benign tumors.
+
+#Interpretability: FA produced more interpretable results, grouping features into factors that represented meaningful tumor characteristics (e.g., size, shape). PCA, while more effective for classification, was less interpretable due to its focus on variance rather than meaningful patterns in the data.
+
+##Patterns and Characteristics Discovered in PCA and FA
+#PCA: PCA highlighted key features (e.g., Radius_Mean, Texture_Mean, Concavity_Mean) that contributed the most to distinguishing tumor types. PCA showed a pattern where malignant tumors separate distinctly along the first few principal components.
+
+#FA: FA grouped features into factors that were easier to interpret, such as size-related factors (e.g., Radius, Perimeter) and shape-related factors (e.g., Concavity, Concave_Points). FA showed that certain clusters of features (e.g., irregular shape and texture) were most relevant for identifying malignancy.
+
+##PCA:
+#Strengths: Maximizes variance, effective for dimensionality reduction, and typically leads to better performance in classification tasks.
+#Limitations: Poor interpretability, as components are linear combinations of features, and it may not always capture underlying data relationships.
+
+##FA:
+#Strengths: Offers better interpretability by grouping correlated features, making it easier to understand the structure of the data.
+#Limitations: May result in slightly lower performance than PCA for classification tasks, and factor selection and interpretation can be subjective.
+
