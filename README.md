@@ -1,7 +1,6 @@
 # Breast Cancer Diagnosis: PCA, Factor Analysis and Logistic Regression
 
-Take-home R practical exam (DA2451 - Multivariate Methods in Business)
-Author: Bavindu Gunasinghe
+R practical (DA2451 - Multivariate Methods in Business)
 
 ## What this project does
 
